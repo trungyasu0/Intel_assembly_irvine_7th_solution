@@ -1,15 +1,15 @@
-include C:\masm32\include64\masm64rt.inc 
+include \masm32\include64\masm64rt.inc 
 
 .data
 	hInstance HINSTANCE 0
 	CommandLine LPSTR 0
-	ClassName db "AntiChrome",0 
-	MenuName db "MenuName",0
-	AppName db "MenuName",0
+	ClassName db "AntiChrome",0,0
+	MenuName db "AntiChrome",0
+	AppName db "AntiChrome",0
 	ID_TIMER equ 1
 	process_id dword 0
 	class_name db 512 dup (0)
-	base db "Chrome_WidgetWin_1",0
+	base db "Chrome_WidgetWin_1",0,0
 	dwDesiredAccess dword 0
 	bInheritHandle dword 0 
 	hProcess qword 0
@@ -56,25 +56,22 @@ WinMain proc hInst: HINSTANCE, hPrevInst: HINSTANCE, CmdLine: LPSTR, CmdShow:dwo
 
 	lea rbx, ClassName
 	lea rax, AppName
-	invoke CreateWindowEx, WS_EX_CLIENTEDGE, rbx, rax, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 200,50, NULL, NULL, hInst, NULL
+	invoke CreateWindowEx, WS_EX_CLIENTEDGE, rbx, rax, DS_MODALFRAME or WS_POPUP or WS_CAPTION or WS_SYSMENU, 100, 200, 500,500, NULL, NULL, hInst, NULL
 	mov hwnd, rax
 
 	invoke ShowWindow, hwnd, SW_SHOWNORMAL
 
 	invoke UpdateWindow, hwnd 
 ll:
-
-		invoke GetMessage, ecx, NULL, 0, 0
-
-		cmp rax, 0
-		jz conti
-
-		lea rbx, msg
-		invoke TranslateMessage, rbx
-
-		lea rbx, msg
-		invoke  DispatchMessage, rbx
-	loop ll
+	lea rbx, msg
+	invoke GetMessage, rbx, NULL, 0, 0
+	cmp rax, 0
+	jz conti
+	lea rbx, msg
+	invoke TranslateMessage, rbx
+	lea rbx, msg
+	invoke  DispatchMessage, rbx
+	jmp ll
 conti:
 	mov rax, msg.wParam
 	ret
@@ -96,8 +93,8 @@ wcreate:
 wtimer:
 	cmp uMsg, WM_TIMER
 	jnz defwindowproc
-	lea rbx, enumWindowCallback
-	invoke EnumWindows, rbx, 0
+	lea rax, enumWindowCallback
+	invoke EnumWindows, rax, 0
 	xor rax, rax
 	jmp en
 defwindowproc:
@@ -107,52 +104,47 @@ en:
 	;pop rbx
     ret 
 WndProc endp
-strcmp proc
-	;offset - offset 
-	push rbp
-	mov rbp, rsp
+
+enumWindowCallback proc hWNd: HWND, lParam: LPARAM 
+	lea rax, process_id
+	invoke GetWindowThreadProcessId, hWNd, rax
+
+	lea rax, class_name
+	invoke GetClassNameA, hWNd, rax, 512
+
+	invoke IsWindowVisible, hWNd 
+	;test eax,eax	
+	;jz endT
 	push rsi
 	push rdi
-	mov rsi, qword ptr [rbp+16]
-	mov rdi, qword ptr [rbp+24]
-	mov rcx, 1000
-	repe cmpsb
+	lea rsi, class_name
+	lea rdi, base
+	xor rcx, rcx
+le1:
+	mov al, byte ptr [rsi]
+	cmp al, byte ptr [rdi]
+	jnz check
+	inc rsi
+	inc rdi
+	inc rcx
+	jmp le1
+check:
+	test rcx,rcx 
+	jz endFF
 	dec rsi
 	dec rdi
 	cmp byte ptr [rsi], 0
-	jnz endFalse
+	jnz endFF
 	cmp byte ptr [rdi], 0
-	jnz endFalse
-endTrue:
-	mov rax,1
+	jnz endFF
+	jmp ok
+endFF:
 	pop rdi
 	pop rsi
-	pop rbp
-	ret 16
-endFalse:
-	xor rax,rax
-	pop rdi
-	pop rsi
-	pop rbp
-	ret 16
-strcmp endp
-
-enumWindowCallback proc hWNd: HWND, lParam: LPARAM 
-	lea rbx, process_id
-	invoke GetWindowThreadProcessId, hWNd, rbx
-
-	lea rbx, class_name
-	invoke GetClassNameA, hWNd, rbx, 512
-
-	invoke IsWindowVisible, hWNd 
-	lea rbx, base
-	lea rax, class_name
-	push rbx
-	push rax
-	call strcmp
-	cmp rax,0
-	jnz endF
+	jmp endT
 ok:
+	pop rdi
+	pop rsi
 	mov dwDesiredAccess, 1
 	mov bInheritHandle, 0
 	invoke OpenProcess, dwDesiredAccess, bInheritHandle, process_id
@@ -166,6 +158,7 @@ endF:
 	mov rax, FALSE
 	ret 
 endT:
+
 	mov rax, TRUE
 	ret 
 enumWindowCallback endp
